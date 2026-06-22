@@ -2,12 +2,12 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Трансляция экрана (Фикс rtcp-mux)</title>
+    <title>Трансляция экрана (Без ошибок)</title>
     <style>
         body { font-family: Arial; text-align: center; background: #111; color: white; padding: 20px; }
         video { width: 400px; background: #000; border-radius: 8px; border: 2px solid #333; }
         .box { font-size: 16px; color: #00ff00; margin: 15px auto; background: #222; padding: 15px; border-radius: 8px; max-width: 500px; text-align: left; }
-        textarea { width: 95%; height: 50px; background: #333; color: #00ff00; border: 1px solid #555; margin: 5px 0; word-break: break-all; }
+        textarea { width: 95%; height: 60px; background: #333; color: #00ff00; border: 1px solid #555; margin: 5px 0; word-break: break-all; font-family: monospace; font-size: 12px; }
         button { padding: 8px 15px; font-size: 14px; cursor: pointer; background: #00ff00; border: none; border-radius: 4px; font-weight: bold; }
         .panel { border-bottom: 1px dashed #555; padding: 10px 0; }
     </style>
@@ -43,23 +43,19 @@
             } catch (err) { alert("Ошибка: " + err.message); }
         }
 
-        function compress(sdp) {
-            let fields = { ufrag: '', pwd: '', fp: '' };
-            sdp.split('\r\n').forEach(line => {
-                if (line.startsWith('a=ice-ufrag:')) fields.ufrag = line.split(':')[1];
-                if (line.startsWith('a=ice-pwd:')) fields.pwd = line.split(':')[1];
-                if (line.startsWith('a=fingerprint:sha-256 ')) fields.fp = line.split('sha-256 ')[1];
-            });
-            return btoa(JSON.stringify(fields));
+        // Высокое сжатие через системный алгоритм GZIP
+        async function compressData(str) {
+            const stream = new Blob([str]).stream().pipeThrough(new CompressionStream('gzip'));
+            const response = new Response(stream);
+            const buffer = await response.arrayBuffer();
+            return btoa(String.fromCharCode(...new Uint8Array(buffer)));
         }
 
-        function decompress(shortStr, isAnswer) {
-            let d = JSON.parse(atob(shortStr));
-            let setup = isAnswer ? 'active' : 'actpass';
-            return {
-                type: isAnswer ? 'answer' : 'offer',
-                sdp: `v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=-\r\nt=0 0\r\na=msid-semantic: WMS\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\nc=IN IP4 0.0.0.0\r\na=rtpmap:96 VP8/90000\r\na=rtcp-mux\r\na=setup:${setup}\r\na=mid:0\r\na=ice-ufrag:${d.ufrag}\r\na=ice-pwd:${d.pwd}\r\na=fingerprint:sha-256 ${d.fp}\r\n`
-            };
+        // Распаковка GZIP
+        async function decompressData(base64Str) {
+            const bytes = Uint8Array.from(atob(base64Str), c => c.charCodeAt(0));
+            const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+            return await new Response(stream).text();
         }
 
         async function go(id) {
@@ -68,9 +64,10 @@
             
             stream.getTracks().forEach(t => pc.addTrack(t, stream));
 
-            pc.onicecandidate = (e) => {
+            pc.onicecandidate = async (e) => {
                 if (!e.candidate) {
-                    let shortCode = compress(pc.localDescription.sdp);
+                    // Кодируем оригинальный полноценный объект, без вырезания строк
+                    let shortCode = await compressData(JSON.stringify(pc.localDescription));
                     document.getElementById(`z-${id}`).innerHTML = `
                         <p style="margin:2px 0; font-size:12px;">Код для отправки:</p>
                         <textarea readonly onclick="this.select()">${shortCode}</textarea>
@@ -87,8 +84,8 @@
             let txt = document.getElementById(`ans-${id}`).value.trim();
             if(!txt) return alert("Введите ответ!");
             try {
-                let fullAnswer = decompress(txt, true);
-                await pcs[id].setRemoteDescription(new RTCSessionDescription(fullAnswer));
+                let decrypted = await decompressData(txt);
+                await pcs[id].setRemoteDescription(new RTCSessionDescription(JSON.parse(decrypted)));
                 document.getElementById(`z-${id}`).innerHTML = "<b style='color:#00ff00'>✓ Подключено!</b>";
             } catch(e) { alert("Ошибка кода: " + e.message); }
         }
