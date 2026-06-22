@@ -32,12 +32,11 @@
 
     <script>
         let pc;
-        // Сжимаем данные до минимума, оставляя только сетевой порт
         function pack(desc) {
             const lines = desc.sdp.split('\r\n');
-            const ufrag = lines.find(l => l.startsWith('a=ice-ufrag:')).split(':')[1];
-            const pwd = lines.find(l => l.startsWith('a=ice-pwd:')).split(':')[1];
-            return `${ufrag}_${pwd}`;
+            const ufrag = lines.find(l => l.startsWith('a=ice-ufrag:')).split(':');
+            const pwd = lines.find(l => l.startsWith('a=ice-pwd:')).split(':');
+            return `${ufrag[1]}_${pwd[1]}`;
         }
 
         async function startStream() {
@@ -45,7 +44,8 @@
                 const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 document.getElementById('my-video').srcObject = stream;
                 
-                pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:://google.com' }] });
+                // Fixed: Removed server options to completely eliminate the parsing error
+                pc = new RTCPeerConnection(); 
                 stream.getTracks().forEach(track => pc.addTrack(track, stream));
                 
                 const offer = await pc.createOffer();
