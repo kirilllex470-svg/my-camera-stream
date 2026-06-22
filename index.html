@@ -2,12 +2,12 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Стример (Короткие коды)</title>
+    <title>Стример (Надежный)</title>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; background: #111; color: white; padding: 20px; }
         video { width: 480px; background: #000; border-radius: 8px; margin-top: 10px; border: 2px solid #333; }
         .box { font-size: 16px; color: #00ff00; margin: 15px auto; background: #222; padding: 15px; border-radius: 8px; max-width: 600px; text-align: left; }
-        textarea { width: 95%; height: 60px; margin-top: 5px; background: #333; color: #00ff00; border: 1px solid #555; padding: 8px; font-size: 12px; word-break: break-all; }
+        textarea { width: 95%; height: 70px; margin-top: 5px; background: #333; color: #00ff00; border: 1px solid #555; padding: 8px; font-size: 12px; word-break: break-all; }
         button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #00ff00; border: none; border-radius: 5px; font-weight: bold; margin-top: 10px; color: black; }
         .btn-blue { background: #00bcff; }
     </style>
@@ -21,39 +21,51 @@
     <button id="startBtn" onclick="startStream()">Запустить трансляцию</button>
 
     <div id="answerSection" class="box" style="display:none;">
-        <label><strong>Шаг 2:</strong> Вставьте ОТВЕТ от друга:</label>
+        <label><strong>Шаг 2:</strong> Вставьте ответ от друга:</label>
         <textarea id="answerCode" placeholder="Вставьте сюда код от друга..."></textarea>
         <button class="btn-blue" onclick="acceptAnswer()">Включить видео другу</button>
     </div>
 
     <script>
         let pc;
+        // Используем стандартный публичный STUN сервер (без ошибок формата)
+        const configuration = { iceServers: [{ urls: 'stun:://google.com' }] };
+
         async function startStream() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 document.getElementById('my-video').srcObject = stream;
                 document.getElementById('status').innerText = "Создаем подключение...";
                 
-                pc = new RTCPeerConnection(); 
+                pc = new RTCPeerConnection(configuration); 
                 stream.getTracks().forEach(track => pc.addTrack(track, stream));
                 
                 const offer = await pc.createOffer();
                 await pc.setLocalDescription(offer);
                 
-                // Wait for network gathering to finish
+                // Исправлено: код сгенерируется, даже если интернет-путь ищется долго
                 pc.onicecandidate = (e) => {
                     if (!e.candidate) {
-                        // Compress the real code so it's much shorter than before
-                        const compressed = btoa(JSON.stringify(pc.localDescription));
-                        document.getElementById('status').innerHTML = `
-                            <p style="color:white; margin:0; font-weight:bold;">Шаг 1: Скопируйте этот код и отправьте другу:</p>
-                            <textarea readonly onclick="this.select()">${compressed}</textarea>
-                        `;
-                        document.getElementById('answerSection').style.display = 'block';
-                        document.getElementById('startBtn').style.display = 'none';
+                        showOfferCode();
                     }
                 };
+                
+                // Запасной таймер: если сеть думает слишком долго, все равно выдать код через 3 секунды
+                setTimeout(() => {
+                    if (pc.localDescription) showOfferCode();
+                }, 3000);
+
             } catch (err) { document.getElementById('status').innerText = "Ошибка: " + err.message; }
+        }
+
+        function showOfferCode() {
+            const compressed = btoa(JSON.stringify(pc.localDescription));
+            document.getElementById('status').innerHTML = `
+                <p style="color:white; margin:0; font-weight:bold;">Шаг 1: Скопируйте этот код и отправьте другу:</p>
+                <textarea readonly onclick="this.select()">${compressed}</textarea>
+            `;
+            document.getElementById('answerSection').style.display = 'block';
+            document.getElementById('startBtn').style.display = 'none';
         }
 
         async function acceptAnswer() {
@@ -63,7 +75,7 @@
                 await pc.setRemoteDescription(new RTCSessionDescription(parsed));
                 document.getElementById('status').innerHTML = "🟢 Соединение установлено! Трансляция идет.";
                 document.getElementById('answerSection').style.display = 'none';
-            } catch (err) { alert("Ошибка при чтении кода от друга: " + err.message); }
+            } catch (err) { alert("Ошибка в коде: " + err.message); }
         }
     </script>
 </body>
