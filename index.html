@@ -28,8 +28,8 @@
 
     <script>
         let pc;
-        // Используем стандартный публичный STUN сервер (без ошибок формата)
-        const configuration = { iceServers: [{ urls: 'stun:://google.com' }] };
+        // Fixed to standard universal mozilla stun server
+        const configuration = { iceServers: [{ urls: 'stun:://mozilla.com' }] };
 
         async function startStream() {
             try {
@@ -43,14 +43,12 @@
                 const offer = await pc.createOffer();
                 await pc.setLocalDescription(offer);
                 
-                // Исправлено: код сгенерируется, даже если интернет-путь ищется долго
                 pc.onicecandidate = (e) => {
                     if (!e.candidate) {
                         showOfferCode();
                     }
                 };
                 
-                // Запасной таймер: если сеть думает слишком долго, все равно выдать код через 3 секунды
                 setTimeout(() => {
                     if (pc.localDescription) showOfferCode();
                 }, 3000);
