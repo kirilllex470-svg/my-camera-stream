@@ -2,93 +2,135 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Трансляция экрана (Без ошибок)</title>
+    <title>Трансляция экрана (До 5 человек)</title>
     <style>
         body { font-family: Arial; text-align: center; background: #111; color: white; padding: 20px; }
-        video { width: 400px; background: #000; border-radius: 8px; border: 2px solid #333; }
-        .box { font-size: 16px; color: #00ff00; margin: 15px auto; background: #222; padding: 15px; border-radius: 8px; max-width: 500px; text-align: left; }
-        textarea { width: 95%; height: 60px; background: #333; color: #00ff00; border: 1px solid #555; margin: 5px 0; word-break: break-all; font-family: monospace; font-size: 12px; }
-        button { padding: 8px 15px; font-size: 14px; cursor: pointer; background: #00ff00; border: none; border-radius: 4px; font-weight: bold; }
-        .panel { border-bottom: 1px dashed #555; padding: 10px 0; }
+        video { width: 480px; background: #000; border-radius: 8px; margin: 10px; border: 2px solid #333; }
+        .box { font-size: 18px; color: #00ff00; margin: 15px auto; background: #222; padding: 15px; border-radius: 8px; max-width: 600px; text-align: left; }
+        textarea { width: 95%; height: 60px; margin-top: 5px; background: #333; color: #00ff00; border: 1px solid #555; padding: 8px; font-size: 14px; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #00ff00; border: none; border-radius: 5px; font-weight: bold; margin-top: 10px; }
+        .btn-blue { background: #00bcff; }
+        .friend-panel { border-bottom: 1px dashed #555; padding-bottom: 15px; margin-bottom: 15px; }
+        .friend-panel:last-child { border: none; }
     </style>
 </head>
 <body>
 
     <h1>Трансляция экрана (До 5 человек)</h1>
+    
+    <div id="status" class="box" style="text-align: center;">
+        Нажмите кнопку ниже, чтобы выбрать экран для трансляции
+    </div>
+    
+    <!-- Окно предпросмотра вашего экрана -->
     <video id="my-video" autoplay muted playsinline></video>
-    <br><br>
-    <button id="startBtn" onclick="startStream()">1. Включить экран</button>
+    <br>
+    <button id="startBtn" onclick="startStream()">1. Включить демонстрацию экрана</button>
 
-    <div id="box" class="box" style="display:none;">
-        <h3>Друзья для подключения:</h3>
-        <div id="friends"></div>
+    <!-- Раздел управления подключениями -->
+    <div id="connectionsSection" class="box" style="display:none;">
+        <h3>Управление подключениями:</h3>
+        <div id="panelsContainer"></div>
     </div>
 
     <script>
-        let stream, pcs = {};
+        let localStream;
+        let connections = [
+            { id: 1, pc: null, name: "Друг 1" },
+            { id: 2, pc: null, name: "Друг 2" },
+            { id: 3, pc: null, name: "Друг 3" },
+            { id: 4, pc: null, name: "Друг 4" },
+            { id: 5, pc: null, name: "Друг 5" }
+        ];
 
         async function startStream() {
             try {
-                stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-                document.getElementById('my-video').srcObject = stream;
-                document.getElementById('startBtn').style.display = 'none';
-                document.getElementById('box').style.display = 'block';
+                document.getElementById('status').innerText = "Выбираем экран...";
                 
-                let html = '';
-                for(let i = 1; i <= 5; i++) {
-                    html += `<div class="panel"><strong>Друг ${i}:</strong>
-                        <div id="z-${i}"><button onclick="go(${i})">Создать код</button></div></div>`;
-                }
-                document.getElementById('friends').innerHTML = html;
-            } catch (err) { alert("Ошибка: " + err.message); }
+                // ГЛАВНОЕ ИЗМЕНЕНИЕ: Используем getDisplayMedia вместо getUserMedia
+                // Браузер сам откроет системное окно выбора: весь экран, окно программы или вкладка
+                localStream = await navigator.mediaDevices.getDisplayMedia({ 
+                    video: true, 
+                    audio: true // Позволяет также делиться системным звуком, если поставить галочку при выборе
+                });
+                
+                document.getElementById('my-video').srcObject = localStream;
+                
+                // Если пользователь нажмет кнопку "Остановить показ" в браузере
+                localStream.getVideoTracks()[0].onended = function () {
+                    document.getElementById('status').innerText = "Трансляция экрана остановлена.";
+                    document.getElementById('connectionsSection').style.display = 'none';
+                    document.getElementById('startBtn').style.display = 'inline-block';
+                };
+
+                document.getElementById('status').innerText = "Экран успешно захвачен! Сгенерируйте коды ниже.";
+                document.getElementById('startBtn').style.display = 'none';
+                document.getElementById('connectionsSection').style.display = 'block';
+
+                renderPanels();
+            } catch (err) {
+                document.getElementById('status').innerText = "Ошибка: " + err.message;
+            }
         }
 
-        // Высокое сжатие через системный алгоритм GZIP
-        async function compressData(str) {
-            const stream = new Blob([str]).stream().pipeThrough(new CompressionStream('gzip'));
-            const response = new Response(stream);
-            const buffer = await response.arrayBuffer();
-            return btoa(String.fromCharCode(...new Uint8Array(buffer)));
+        function renderPanels() {
+            const container = document.getElementById('panelsContainer');
+            container.innerHTML = "";
+
+            connections.forEach(conn => {
+                const panel = document.createElement('div');
+                panel.className = 'friend-panel';
+                panel.innerHTML = `
+                    <strong style="color:#00bcff;">${conn.name}:</strong>
+                    <div id="action-zone-${conn.id}">
+                        <button onclick="generateOffer(${conn.id})">Создать код для этого друга</button>
+                    </div>
+                `;
+                container.appendChild(panel);
+            });
         }
 
-        // Распаковка GZIP
-        async function decompressData(base64Str) {
-            const bytes = Uint8Array.from(atob(base64Str), c => c.charCodeAt(0));
-            const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
-            return await new Response(stream).text();
-        }
-
-        async function go(id) {
-            let pc = new RTCPeerConnection({ iceServers: [] });
-            pcs[id] = pc;
+        async function generateOffer(id) {
+            const conn = connections.find(c => c.id === id);
+            const zone = document.getElementById(`action-zone-${id}`);
             
-            stream.getTracks().forEach(t => pc.addTrack(t, stream));
+            zone.innerHTML = "Генерация кода...";
 
-            pc.onicecandidate = async (e) => {
-                if (!e.candidate) {
-                    // Кодируем оригинальный полноценный объект, без вырезания строк
-                    let shortCode = await compressData(JSON.stringify(pc.localDescription));
-                    document.getElementById(`z-${id}`).innerHTML = `
-                        <p style="margin:2px 0; font-size:12px;">Код для отправки:</p>
-                        <textarea readonly onclick="this.select()">${shortCode}</textarea>
-                        <p style="margin:2px 0; font-size:12px;">Ответ от друга:</p>
-                        <textarea id="ans-${id}" placeholder="Вставь ответ..."></textarea>
-                        <button style="background:#00bcff" onclick="connect(${id})">Подключить</button>`;
-                }
-            };
+            conn.pc = new RTCPeerConnection();
             
-            await pc.setLocalDescription(await pc.createOffer());
+            localStream.getTracks().forEach(track => conn.pc.addTrack(track, localStream));
+            
+            const offer = await conn.pc.createOffer();
+            await conn.pc.setLocalDescription(offer);
+            
+            setTimeout(() => {
+                const base64Code = btoa(JSON.stringify(conn.pc.localDescription));
+                zone.innerHTML = `
+                    <p style="margin:5px 0; font-size:14px; color:white;">1. Скопируйте и отправьте этот код другу:</p>
+                    <textarea readonly onclick="this.select()">${base64Code}</textarea>
+                    <p style="margin:5px 0; font-size:14px; color:white;">2. Вставьте ответный код от этого друга:</p>
+                    <textarea id="answer-${id}" placeholder="Вставьте ответ..."></textarea>
+                    <button class="btn-blue" onclick="acceptAnswer(${id})">Подключить</button>
+                `;
+            }, 1000);
         }
 
-        async function connect(id) {
-            let txt = document.getElementById(`ans-${id}`).value.trim();
-            if(!txt) return alert("Введите ответ!");
+        async function acceptAnswer(id) {
+            const conn = connections.find(c => c.id === id);
+            const answerText = document.getElementById(`answer-${id}`).value.trim();
+            const zone = document.getElementById(`action-zone-${id}`);
+
+            if (!answerText) return alert("Пожалуйста, вставьте ответный код!");
+
             try {
-                let decrypted = await decompressData(txt);
-                await pcs[id].setRemoteDescription(new RTCSessionDescription(JSON.parse(decrypted)));
-                document.getElementById(`z-${id}`).innerHTML = "<b style='color:#00ff00'>✓ Подключено!</b>";
-            } catch(e) { alert("Ошибка кода: " + e.message); }
+                const answerDesc = JSON.parse(atob(answerText));
+                await conn.pc.setRemoteDescription(new RTCSessionDescription(answerDesc));
+                zone.innerHTML = "<span style='color:#00ff00; font-weight:bold;'>✓ Подключено успешно!</span>";
+            } catch (err) {
+                alert("Ошибка применения кода: " + err.message);
+            }
         }
     </script>
+
 </body>
 </html>
