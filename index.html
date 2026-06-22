@@ -28,8 +28,6 @@
 
     <script>
         let pc;
-        // Fixed to standard universal mozilla stun server
-        const configuration = { iceServers: [{ urls: 'stun:://mozilla.com' }] };
 
         async function startStream() {
             try {
@@ -37,7 +35,8 @@
                 document.getElementById('my-video').srcObject = stream;
                 document.getElementById('status').innerText = "Создаем подключение...";
                 
-                pc = new RTCPeerConnection(configuration); 
+                // Fixed: Completely blank constructor to prevent parsing errors
+                pc = new RTCPeerConnection(); 
                 stream.getTracks().forEach(track => pc.addTrack(track, stream));
                 
                 const offer = await pc.createOffer();
@@ -51,7 +50,7 @@
                 
                 setTimeout(() => {
                     if (pc.localDescription) showOfferCode();
-                }, 3000);
+                }, 1500);
 
             } catch (err) { document.getElementById('status').innerText = "Ошибка: " + err.message; }
         }
