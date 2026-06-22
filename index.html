@@ -2,130 +2,68 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Мой Стрим для 5 человек</title>
+    <title>Мой Личный Стрим</title>
+    <!-- Подключаем библиотеку для связи между компьютерами -->
+    <script src="https://unpkg.com"></script>
     <style>
-        body { font-family: Arial; text-align: center; background: #111; color: white; padding: 20px; }
-        video { width: 320px; background: #000; border-radius: 8px; margin: 10px; border: 2px solid #333; }
-        .box { font-size: 16px; color: #00ff00; margin: 15px auto; background: #222; padding: 15px; border-radius: 8px; max-width: 700px; text-align: left; }
-        textarea { width: 95%; height: 60px; margin-top: 5px; background: #333; color: #00ff00; border: 1px solid #555; padding: 8px; font-size: 12px; }
-        button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #00ff00; border: none; border-radius: 5px; font-weight: bold; margin-top: 10px; }
-        .friend-panel { border-left: 4px solid #00bcff; padding-left: 15px; margin-bottom: 20px; }
-        .btn-blue { background: #00bcff; }
-        .grid { display: flex; justify-content: center; flex-wrap: wrap; }
+        body { font-family: sans-serif; text-align: center; background: #222; color: #fff; }
+        video { width: 45%; background: #000; margin: 10px; border-radius: 8px; }
+        .box { margin: 20px; padding: 15px; background: #333; display: inline-block; border-radius: 5px; }
     </style>
 </head>
 <body>
 
-    <h1>Мой Стрим для 5 человек</h1>
+    <h1>Прямой эфир на 5 человек</h1>
     
-    <div id="status" class="box" style="text-align: center; color: white;">
-        Нажмите кнопку, чтобы включить вашу камеру
+    <div class="box">
+        <p>Ваш секретный номер трансляции (отправьте его 5 друзьям):</p>
+        <h2 id="my-id">Загрузка...</h2>
     </div>
-    
-    <div class="grid">
-        <div>
-            <h3>Вы (Стример)</h3>
-            <video id="my-video" autoplay muted playsinline></video>
-        </div>
+
+    <div class="box">
+        <p>Подключиться к другу (если вы зритель):</p>
+        <input type="text" id="peer-id" placeholder="Вставьте номер стрима">
+        <button onclick="startListening()">Смотреть стрим</button>
     </div>
-    
-    <center><button id="startBtn" onclick="initCamera()">Шаг 1: Включить камеру</button></center>
 
-    <!-- Секция управления подключениями друзей -->
-    <div id="connectionsSection" class="box" style="display:none; color: white;">
-        <h3>Шаг 2: Подключение друзей (Максимум 4 друга)</h3>
-        <p>Так как мы работаем напрямую, вам нужно создать отдельный код для каждого из 4 друзей.</p>
-        
-        <!-- Друг 1 -->
-        <div class="friend-panel">
-            <h4>Друг №1</h4>
-            <button onclick="createOfferForFriend(1)">1. Создать код для Друга 1</button>
-            <div id="offer-zone-1"></div>
-        </div>
-
-        <!-- Друг 2 -->
-        <div class="friend-panel">
-            <h4>Друг №2</h4>
-            <button onclick="createOfferForFriend(2)">1. Создать код для Друга 2</button>
-            <div id="offer-zone-2"></div>
-        </div>
-
-        <!-- Друг 3 -->
-        <div class="friend-panel">
-            <h4>Друг №3</h4>
-            <button onclick="createOfferForFriend(3)">1. Создать код для Друга 3</button>
-            <div id="offer-zone-3"></div>
-        </div>
-
-        <!-- Друг 4 -->
-        <div class="friend-panel">
-            <h4>Друг №4</h4>
-            <button onclick="createOfferForFriend(4)">1. Создать код для Друга 4</button>
-            <div id="offer-zone-4"></div>
-        </div>
-    </div>
+    <br>
+    <video id="local-video" autoplay muted playsinline></video>
+    <video id="remote-video" autoplay playsinline></video>
 
     <script>
-        let localStream;
-        // Храним подключения для каждого из 4 друзей отдельно
-        let peerConnections = { 1: null, 2: null, 3: null, 4: null };
+        // Создаем подключение
+        const peer = new Peer();
+        let myStream;
 
-        // Включаем камеру
-        async function initCamera() {
-            try {
-                document.getElementById('status').innerText = "Включаем камеру...";
-                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                document.getElementById('my-video').srcObject = localStream;
-                
-                document.getElementById('status').innerText = "Камера готова. Теперь настройте друзей ниже.";
-                document.getElementById('connectionsSection').style.display = 'block';
-                document.getElementById('startBtn').style.display = 'none';
-            } catch (err) {
-                document.getElementById('status').innerText = "Ошибка камеры: " + err.message;
-            }
-        }
+        // Показываем ваш ID на экране
+        peer.on('open', (id) => {
+            document.getElementById('my-id').innerText = id;
+        });
 
-        // Создаем приглашение для конкретного друга
-        async function createOfferForFriend(id) {
-            try {
-                const pc = new RTCPeerConnection();
-                peerConnections[id] = pc;
+        // Включаем вашу камеру и микрофон при запуске страницы
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+            .then((stream) => {
+                myStream = stream;
+                document.getElementById('local-video').srcObject = stream;
+            })
+            .catch(err => console.error("Нет доступа к камере:", err));
 
-                // Отдаем видеопоток этому другу
-                localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+        // Когда зритель звонит вам, ваш браузер автоматически отправляет ему видео
+        peer.on('call', (call) => {
+            call.answer(myStream);
+            // Если зритель тоже включит камеру, вы его увидите
+            call.on('stream', (remoteStream) => {
+                document.getElementById('remote-video').srcObject = remoteStream;
+            });
+        });
 
-                const offer = await pc.createOffer();
-                await pc.setLocalDescription(offer);
-
-                setTimeout(() => {
-                    const base64Code = btoa(JSON.stringify(pc.localDescription));
-                    document.getElementById(`offer-zone-1`).innerHTML = '';
-                    document.getElementById(`offer-zone-${id}`).innerHTML = `
-                        <p style="margin:5px 0; font-size:13px;">Скопируйте и отправьте этот код Другу ${id}:</p>
-                        <textarea readonly onclick="this.select()">${base64Code}</textarea>
-                        <p style="margin:5px 0; font-size:13px;">Вставьте ответный код от Друга ${id} ниже:</p>
-                        <textarea id="answerCode-${id}" placeholder="Вставьте ответ от друга..."></textarea>
-                        <br>
-                        <button class="btn-blue" onclick="acceptAnswerFromFriend(${id})">Включить трансляцию для Друга ${id}</button>
-                    `;
-                }, 1000);
-            } catch (err) {
-                alert("Ошибка: " + err.message);
-            }
-        }
-
-        // Принимаем ответ от конкретного друга
-        async function acceptAnswerFromFriend(id) {
-            const answerText = document.getElementById(`answerCode-${id}`).value.trim();
-            if (!answerText) return alert("Пожалуйста, вставьте код!");
-
-            try {
-                const answerDesc = JSON.parse(atob(answerText));
-                await peerConnections[id].setRemoteDescription(new RTCSessionDescription(answerDesc));
-                alert(`Успешно! Друг №${id} теперь видит ваш стрим!`);
-            } catch (err) {
-                alert("Ошибка применения кода: " + err.message);
-            }
+        // Функция для зрителя: подключиться к стримеру
+        function startListening() {
+            const targetId = document.getElementById('peer-id').value;
+            const call = peer.call(targetId, myStream);
+            call.on('stream', (remoteStream) => {
+                document.getElementById('remote-video').srcObject = remoteStream;
+            });
         }
     </script>
 </body>
