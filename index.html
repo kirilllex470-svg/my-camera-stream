@@ -2,86 +2,123 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Моя трансляция (Напрямую)</title>
+    <title>Моя трансляция (На 5 человек)</title>
     <style>
         body { font-family: Arial; text-align: center; background: #111; color: white; padding: 20px; }
-        video { width: 480px; background: #000; border-radius: 8px; margin-top: 10px; border: 2px solid #333; }
+        video { width: 320px; background: #000; border-radius: 8px; margin: 10px; border: 2px solid #333; }
         .box { font-size: 18px; color: #00ff00; margin: 15px auto; background: #222; padding: 15px; border-radius: 8px; max-width: 600px; text-align: left; }
-        textarea { width: 95%; height: 80px; margin-top: 5px; background: #333; color: #00ff00; border: 1px solid #555; padding: 8px; font-size: 14px; }
+        textarea { width: 95%; height: 60px; margin-top: 5px; background: #333; color: #00ff00; border: 1px solid #555; padding: 8px; font-size: 14px; }
         button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #00ff00; border: none; border-radius: 5px; font-weight: bold; margin-top: 10px; }
         .btn-blue { background: #00bcff; }
+        .friend-panel { border-bottom: 1px dashed #555; padding-bottom: 15px; margin-bottom: 15px; }
+        .friend-panel:last-child { border: none; }
     </style>
 </head>
 <body>
 
-    <h1>Моя трансляция</h1>
+    <h1>Моя трансляция (До 5 человек)</h1>
     
     <div id="status" class="box" style="text-align: center;">
-        Нажмите кнопку ниже, чтобы начать трансляцию
+        Нажмите кнопку ниже, чтобы запустить камеру
     </div>
     
     <video id="my-video" autoplay muted playsinline></video>
     <br>
-    <button id="startBtn" onclick="startStream()">Запустить трансляцию</button>
+    <button id="startBtn" onclick="startStream()">1. Включить камеру</button>
 
-    <!-- Поле для Шага 2 (появится после включения камеры) -->
-    <div id="answerSection" class="box" style="display:none;">
-        <label><strong>Шаг 2:</strong> Вставьте ответный код, который вам прислал друг:</label>
-        <textarea id="answerCode" placeholder="Вставьте ответный код сюда..."></textarea>
-        <button class="btn-blue" onclick="acceptAnswer()">Включить связь с другом</button>
+    <!-- Раздел управления подключениями -->
+    <div id="connectionsSection" class="box" style="display:none;">
+        <h3>Управление подключениями:</h3>
+        <div id="panelsContainer"></div>
     </div>
 
     <script>
-        let pc; // Объявляем переменную для связи глобально
+        let localStream;
+        // Массив для хранения 5 отдельных подключений
+        let connections = [
+            { id: 1, pc: null, name: "Друг 1" },
+            { id: 2, pc: null, name: "Друг 2" },
+            { id: 3, pc: null, name: "Друг 3" },
+            { id: 4, pc: null, name: "Друг 4" },
+            { id: 5, pc: null, name: "Друг 5" }
+        ];
 
         async function startStream() {
             try {
                 document.getElementById('status').innerText = "Включаем камеру...";
                 
-                // 1. Получаем доступ к камере
-                const localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                // Получаем доступ к камере и микрофону
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 document.getElementById('my-video').srcObject = localStream;
                 
-                document.getElementById('status').innerText = "Создаем подключение...";
+                document.getElementById('status').innerText = "Камера готова. Сгенерируйте коды ниже.";
+                document.getElementById('startBtn').style.display = 'none';
+                document.getElementById('connectionsSection').style.display = 'block';
 
-                // 2. Создаем объект соединения
-                pc = new RTCPeerConnection();
-                
-                // 3. Добавляем видео и звук в канал связи
-                localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-                
-                // 4. Создаем приглашение (Offer)
-                const offer = await pc.createOffer();
-                await pc.setLocalDescription(offer);
-                
-                // 5. Ждем секунду и показываем код для друга
-                setTimeout(() => {
-                    const base64Code = btoa(JSON.stringify(pc.localDescription));
-                    document.getElementById('status').innerHTML = `
-                        <p style="color:white; margin:0; font-weight:bold;">Шаг 1: Скопируйте этот код и отправьте другу:</p>
-                        <textarea readonly onclick="this.select()">${base64Code}</textarea>
-                    `;
-                    // Показываем окошко для Шага 2
-                    document.getElementById('answerSection').style.display = 'block';
-                    document.getElementById('startBtn').style.display = 'none';
-                }, 1000);
-
+                // Создаем панели управления для каждого из 5 друзей
+                renderPanels();
             } catch (err) {
                 document.getElementById('status').innerText = "Ошибка: " + err.message;
             }
         }
 
-        async function acceptAnswer() {
-            const answerText = document.getElementById('answerCode').value.trim();
-            if (!answerText) return alert("Пожалуйста, вставьте ответный код от друга!");
+        function renderPanels() {
+            const container = document.getElementById('panelsContainer');
+            container.innerHTML = "";
+
+            connections.forEach(conn => {
+                const panel = document.createElement('div');
+                panel.className = 'friend-panel';
+                panel.innerHTML = `
+                    <strong style="color:#00bcff;">${conn.name}:</strong>
+                    <div id="action-zone-${conn.id}">
+                        <button onclick="generateOffer(${conn.id})">Создать код для этого друга</button>
+                    </div>
+                `;
+                container.appendChild(panel);
+            });
+        }
+
+        async function generateOffer(id) {
+            const conn = connections.find(c => c.id === id);
+            const zone = document.getElementById(`action-zone-${id}`);
+            
+            zone.innerHTML = "Генерация кода...";
+
+            // Создаем отдельный PeerConnection для этого конкретного друга
+            conn.pc = new RTCPeerConnection();
+            
+            // Добавляем наши медиапотоки
+            localStream.getTracks().forEach(track => conn.pc.addTrack(track, localStream));
+            
+            // Создаем предложение (Offer)
+            const offer = await conn.pc.createOffer();
+            await conn.pc.setLocalDescription(offer);
+            
+            // Ждем секунду для сбора данных, затем показываем интерфейс ввода/вывода
+            setTimeout(() => {
+                const base64Code = btoa(JSON.stringify(conn.pc.localDescription));
+                zone.innerHTML = `
+                    <p style="margin:5px 0; font-size:14px; color:white;">1. Скопируйте и отправьте этот код другу:</p>
+                    <textarea readonly onclick="this.select()">${base64Code}</textarea>
+                    <p style="margin:5px 0; font-size:14px; color:white;">2. Вставьте ответный код от этого друга:</p>
+                    <textarea id="answer-${id}" placeholder="Вставьте ответ..."></textarea>
+                    <button class="btn-blue" onclick="acceptAnswer(${id})">Подключить</button>
+                `;
+            }, 1000);
+        }
+
+        async function acceptAnswer(id) {
+            const conn = connections.find(c => c.id === id);
+            const answerText = document.getElementById(`answer-${id}`).value.trim();
+            const zone = document.getElementById(`action-zone-${id}`);
+
+            if (!answerText) return alert("Пожалуйста, вставьте ответный код!");
 
             try {
-                // Декодируем и применяем ответный код от друга
                 const answerDesc = JSON.parse(atob(answerText));
-                await pc.setRemoteDescription(new RTCSessionDescription(answerDesc));
-                
-                document.getElementById('status').innerHTML = "<p style='color:#00ff00; margin:0; font-weight:bold;'>Соединение установлено! Трансляция идет напрямую.</p>";
-                document.getElementById('answerSection').style.display = 'none';
+                await conn.pc.setRemoteDescription(new RTCSessionDescription(answerDesc));
+                zone.innerHTML = "<span style='color:#00ff00; font-weight:bold;'>✓ Подключено успешно!</span>";
             } catch (err) {
                 alert("Ошибка применения кода: " + err.message);
             }
