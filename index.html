@@ -2,135 +2,99 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Трансляция экрана (До 5 человек)</title>
+    <title>Трансляция экрана (Рабочая версия)</title>
     <style>
         body { font-family: Arial; text-align: center; background: #111; color: white; padding: 20px; }
-        video { width: 480px; background: #000; border-radius: 8px; margin: 10px; border: 2px solid #333; }
-        .box { font-size: 18px; color: #00ff00; margin: 15px auto; background: #222; padding: 15px; border-radius: 8px; max-width: 600px; text-align: left; }
-        textarea { width: 95%; height: 60px; margin-top: 5px; background: #333; color: #00ff00; border: 1px solid #555; padding: 8px; font-size: 14px; }
-        button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #00ff00; border: none; border-radius: 5px; font-weight: bold; margin-top: 10px; }
-        .btn-blue { background: #00bcff; }
-        .friend-panel { border-bottom: 1px dashed #555; padding-bottom: 15px; margin-bottom: 15px; }
-        .friend-panel:last-child { border: none; }
+        video { width: 400px; background: #000; border-radius: 8px; border: 2px solid #333; }
+        .box { font-size: 16px; color: #00ff00; margin: 15px auto; background: #222; padding: 15px; border-radius: 8px; max-width: 500px; text-align: left; }
+        textarea { width: 95%; height: 50px; background: #333; color: #00ff00; border: 1px solid #555; margin: 5px 0; word-break: break-all; }
+        button { padding: 8px 15px; font-size: 14px; cursor: pointer; background: #00ff00; border: none; border-radius: 4px; font-weight: bold; }
+        .panel { border-bottom: 1px dashed #555; padding: 10px 0; }
     </style>
 </head>
 <body>
 
     <h1>Трансляция экрана (До 5 человек)</h1>
-    
-    <div id="status" class="box" style="text-align: center;">
-        Нажмите кнопку ниже, чтобы выбрать экран для трансляции
-    </div>
-    
-    <!-- Окно предпросмотра вашего экрана -->
     <video id="my-video" autoplay muted playsinline></video>
-    <br>
-    <button id="startBtn" onclick="startStream()">1. Включить демонстрацию экрана</button>
+    <br><br>
+    <button id="startBtn" onclick="startStream()">1. Включить экран</button>
 
-    <!-- Раздел управления подключениями -->
-    <div id="connectionsSection" class="box" style="display:none;">
-        <h3>Управление подключениями:</h3>
-        <div id="panelsContainer"></div>
+    <div id="box" class="box" style="display:none;">
+        <h3>Друзья для подключения:</h3>
+        <div id="friends"></div>
     </div>
 
     <script>
-        let localStream;
-        let connections = [
-            { id: 1, pc: null, name: "Друг 1" },
-            { id: 2, pc: null, name: "Друг 2" },
-            { id: 3, pc: null, name: "Друг 3" },
-            { id: 4, pc: null, name: "Друг 4" },
-            { id: 5, pc: null, name: "Друг 5" }
-        ];
+        let stream, pcs = {};
 
         async function startStream() {
             try {
-                document.getElementById('status').innerText = "Выбираем экран...";
-                
-                // ГЛАВНОЕ ИЗМЕНЕНИЕ: Используем getDisplayMedia вместо getUserMedia
-                // Браузер сам откроет системное окно выбора: весь экран, окно программы или вкладка
-                localStream = await navigator.mediaDevices.getDisplayMedia({ 
-                    video: true, 
-                    audio: true // Позволяет также делиться системным звуком, если поставить галочку при выборе
-                });
-                
-                document.getElementById('my-video').srcObject = localStream;
-                
-                // Если пользователь нажмет кнопку "Остановить показ" в браузере
-                localStream.getVideoTracks()[0].onended = function () {
-                    document.getElementById('status').innerText = "Трансляция экрана остановлена.";
-                    document.getElementById('connectionsSection').style.display = 'none';
-                    document.getElementById('startBtn').style.display = 'inline-block';
-                };
-
-                document.getElementById('status').innerText = "Экран успешно захвачен! Сгенерируйте коды ниже.";
+                stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+                document.getElementById('my-video').srcObject = stream;
                 document.getElementById('startBtn').style.display = 'none';
-                document.getElementById('connectionsSection').style.display = 'block';
-
-                renderPanels();
-            } catch (err) {
-                document.getElementById('status').innerText = "Ошибка: " + err.message;
-            }
+                document.getElementById('box').style.display = 'block';
+                
+                let html = '';
+                for(let i = 1; i <= 5; i++) {
+                    html += `<div class="panel"><strong>Друг ${i}:</strong>
+                        <div id="z-${i}"><button onclick="go(${i})">Создать код</button></div></div>`;
+                }
+                document.getElementById('friends').innerHTML = html;
+            } catch (err) { alert("Ошибка: " + err.message); }
         }
 
-        function renderPanels() {
-            const container = document.getElementById('panelsContainer');
-            container.innerHTML = "";
-
-            connections.forEach(conn => {
-                const panel = document.createElement('div');
-                panel.className = 'friend-panel';
-                panel.innerHTML = `
-                    <strong style="color:#00bcff;">${conn.name}:</strong>
-                    <div id="action-zone-${conn.id}">
-                        <button onclick="generateOffer(${conn.id})">Создать код для этого друга</button>
-                    </div>
-                `;
-                container.appendChild(panel);
+        // Безопасное сжатие: оставляет только самые важные медиа-настройки и параметры сети
+        function compress(sdp) {
+            let fields = { ufrag: '', pwd: '', fp: '', ssrc: '' };
+            sdp.split('\r\n').forEach(line => {
+                if (line.startsWith('a=ice-ufrag:')) fields.ufrag = line.split(':')[1];
+                if (line.startsWith('a=ice-pwd:')) fields.pwd = line.split(':')[1];
+                if (line.startsWith('a=fingerprint:sha-256 ')) fields.fp = line.split('sha-256 ')[1];
+                if (line.startsWith('a=ssrc:') && line.includes('cname:')) fields.ssrc = line.split(' ')[0].split(':')[1];
             });
+            return btoa(JSON.stringify(fields));
         }
 
-        async function generateOffer(id) {
-            const conn = connections.find(c => c.id === id);
-            const zone = document.getElementById(`action-zone-${id}`);
-            
-            zone.innerHTML = "Генерация кода...";
-
-            conn.pc = new RTCPeerConnection();
-            
-            localStream.getTracks().forEach(track => conn.pc.addTrack(track, localStream));
-            
-            const offer = await conn.pc.createOffer();
-            await conn.pc.setLocalDescription(offer);
-            
-            setTimeout(() => {
-                const base64Code = btoa(JSON.stringify(conn.pc.localDescription));
-                zone.innerHTML = `
-                    <p style="margin:5px 0; font-size:14px; color:white;">1. Скопируйте и отправьте этот код другу:</p>
-                    <textarea readonly onclick="this.select()">${base64Code}</textarea>
-                    <p style="margin:5px 0; font-size:14px; color:white;">2. Вставьте ответный код от этого друга:</p>
-                    <textarea id="answer-${id}" placeholder="Вставьте ответ..."></textarea>
-                    <button class="btn-blue" onclick="acceptAnswer(${id})">Подключить</button>
-                `;
-            }, 1000);
+        // Восстановление полноценной структуры WebRTC с кодеком VP8
+        function decompress(shortStr, isAnswer) {
+            let d = JSON.parse(atob(shortStr));
+            let setup = isAnswer ? 'active' : 'actpass';
+            return {
+                type: isAnswer ? 'answer' : 'offer',
+                sdp: `v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=-\r\nt=0 0\r\na=msid-semantic: WMS\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\nc=IN IP4 0.0.0.0\r\na=rtpmap:96 VP8/90000\r\na=setup:${setup}\r\na=mid:0\r\na=ice-ufrag:${d.ufrag}\r\na=ice-pwd:${d.pwd}\r\na=fingerprint:sha-256 ${d.fp}\r\n` + (d.ssrc ? `a=ssrc:${d.ssrc} cname:stream\r\n` : '')
+            };
         }
 
-        async function acceptAnswer(id) {
-            const conn = connections.find(c => c.id === id);
-            const answerText = document.getElementById(`answer-${id}`).value.trim();
-            const zone = document.getElementById(`action-zone-${id}`);
+        async function go(id) {
+            let pc = new RTCPeerConnection({ iceServers: [] });
+            pcs[id] = pc;
+            
+            stream.getTracks().forEach(t => pc.addTrack(t, stream));
 
-            if (!answerText) return alert("Пожалуйста, вставьте ответный код!");
+            pc.onicecandidate = (e) => {
+                if (!e.candidate) {
+                    let shortCode = compress(pc.localDescription.sdp);
+                    document.getElementById(`z-${id}`).innerHTML = `
+                        <p style="margin:2px 0; font-size:12px;">Код для отправки:</p>
+                        <textarea readonly onclick="this.select()">${shortCode}</textarea>
+                        <p style="margin:2px 0; font-size:12px;">Ответ от друга:</p>
+                        <textarea id="ans-${id}" placeholder="Вставь ответ..."></textarea>
+                        <button style="background:#00bcff" onclick="connect(${id})">Подключить</button>`;
+                }
+            };
+            
+            await pc.setLocalDescription(await pc.createOffer());
+        }
 
+        async function connect(id) {
+            let txt = document.getElementById(`ans-${id}`).value.trim();
+            if(!txt) return alert("Введите ответ!");
             try {
-                const answerDesc = JSON.parse(atob(answerText));
-                await conn.pc.setRemoteDescription(new RTCSessionDescription(answerDesc));
-                zone.innerHTML = "<span style='color:#00ff00; font-weight:bold;'>✓ Подключено успешно!</span>";
-            } catch (err) {
-                alert("Ошибка применения кода: " + err.message);
-            }
+                let fullAnswer = decompress(txt, true);
+                await pcs[id].setRemoteDescription(new RTCSessionDescription(fullAnswer));
+                document.getElementById(`z-${id}`).innerHTML = "<b style='color:#00ff00'>✓ Подключено!</b>";
+            } catch(e) { alert("Ошибка кода! Проверьте правильность скопированного текста."); }
         }
     </script>
-
 </body>
 </html>
