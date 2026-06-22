@@ -2,67 +2,67 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Мой Личный Стрим</title>
-    <!-- Подключаем библиотеку для связи между компьютерами -->
+    <title>Мой Стрим на GitHub</title>
     <script src="https://unpkg.com"></script>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #222; color: #fff; }
-        video { width: 45%; background: #000; margin: 10px; border-radius: 8px; }
-        .box { margin: 20px; padding: 15px; background: #333; display: inline-block; border-radius: 5px; }
+        body { font-family: sans-serif; text-align: center; background: #1a1a1a; color: #fff; padding-top: 30px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        video { width: 45%; background: #000; margin: 10px; border: 2px solid #333; border-radius: 10px; }
+        .box { margin: 15px; padding: 15px; background: #2a2a2a; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        input, button { padding: 10px; font-size: 16px; border-radius: 5px; border: none; margin: 5px; }
+        button { background: #28a745; color: white; cursor: pointer; font-weight: bold; }
+        button:hover { background: #218838; }
     </style>
 </head>
 <body>
+    <div class="container">
+        <h1>Прямой эфир через GitHub Pages</h1>
+        
+        <div class="box">
+            <h3>Я Стример</h3>
+            <p>Скопируйте этот ID и отправьте друзьям:</p>
+            <h2 id="my-id" style="color: #007bff;">Получение ID...</h2>
+        </div>
 
-    <h1>Прямой эфир на 5 человек</h1>
-    
-    <div class="box">
-        <p>Ваш секретный номер трансляции (отправьте его 5 друзьям):</p>
-        <h2 id="my-id">Загрузка...</h2>
+        <div class="box">
+            <h3>Я Зритель</h3>
+            <p>Вставьте ID стримера ниже:</p>
+            <input type="text" id="peer-id" placeholder="ID стримера">
+            <button onclick="connectToStream()">Смотреть трансляцию</button>
+        </div>
+
+        <br>
+        <video id="my-camera" autoplay muted playsinline></video>
+        <video id="friend-camera" autoplay playsinline></video>
     </div>
-
-    <div class="box">
-        <p>Подключиться к другу (если вы зритель):</p>
-        <input type="text" id="peer-id" placeholder="Вставьте номер стрима">
-        <button onclick="startListening()">Смотреть стрим</button>
-    </div>
-
-    <br>
-    <video id="local-video" autoplay muted playsinline></video>
-    <video id="remote-video" autoplay playsinline></video>
 
     <script>
-        // Создаем подключение
         const peer = new Peer();
-        let myStream;
+        let localStream;
 
-        // Показываем ваш ID на экране
-        peer.on('open', (id) => {
+        peer.on('open', id => {
             document.getElementById('my-id').innerText = id;
         });
 
-        // Включаем вашу камеру и микрофон при запуске страницы
         navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-            .then((stream) => {
-                myStream = stream;
-                document.getElementById('local-video').srcObject = stream;
+            .then(stream => {
+                localStream = stream;
+                document.getElementById('my-camera').srcObject = stream;
             })
-            .catch(err => console.error("Нет доступа к камере:", err));
+            .catch(err => console.error("Камера недоступна:", err));
 
-        // Когда зритель звонит вам, ваш браузер автоматически отправляет ему видео
-        peer.on('call', (call) => {
-            call.answer(myStream);
-            // Если зритель тоже включит камеру, вы его увидите
-            call.on('stream', (remoteStream) => {
-                document.getElementById('remote-video').srcObject = remoteStream;
+        peer.on('call', call => {
+            call.answer(localStream);
+            call.on('stream', remoteStream => {
+                document.getElementById('friend-camera').srcObject = remoteStream;
             });
         });
 
-        // Функция для зрителя: подключиться к стримеру
-        function startListening() {
+        function connectToStream() {
             const targetId = document.getElementById('peer-id').value;
-            const call = peer.call(targetId, myStream);
-            call.on('stream', (remoteStream) => {
-                document.getElementById('remote-video').srcObject = remoteStream;
+            const call = peer.call(targetId, localStream);
+            call.on('stream', remoteStream => {
+                document.getElementById('friend-camera').srcObject = remoteStream;
             });
         }
     </script>
