@@ -24,7 +24,7 @@
 
             // Создаем подключение с фиксированным ID комнаты. 
             // ЗАМЕНИТЕ 'my-unique-camera-room-2026' НА СВОЕ СЕКРЕТНОЕ СЛОВО!
-            const peer = new Peer('my-unique-camera-room-2026');
+            const peer = new Peer('my-unique-camera-room-00000');
 
             peer.on('open', (id) => {
                 document.getElementById('status').innerHTML = `🟢 Трансляция готова!<br>Друг может заходить на страницу зрителя.`;
