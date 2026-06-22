@@ -2,77 +2,130 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Стример (Надежный)</title>
+    <title>Мой Стрим для 5 человек</title>
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; background: #111; color: white; padding: 20px; }
-        video { width: 480px; background: #000; border-radius: 8px; margin-top: 10px; border: 2px solid #333; }
-        .box { font-size: 16px; color: #00ff00; margin: 15px auto; background: #222; padding: 15px; border-radius: 8px; max-width: 600px; text-align: left; }
-        textarea { width: 95%; height: 70px; margin-top: 5px; background: #333; color: #00ff00; border: 1px solid #555; padding: 8px; font-size: 12px; word-break: break-all; }
-        button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #00ff00; border: none; border-radius: 5px; font-weight: bold; margin-top: 10px; color: black; }
+        body { font-family: Arial; text-align: center; background: #111; color: white; padding: 20px; }
+        video { width: 320px; background: #000; border-radius: 8px; margin: 10px; border: 2px solid #333; }
+        .box { font-size: 16px; color: #00ff00; margin: 15px auto; background: #222; padding: 15px; border-radius: 8px; max-width: 700px; text-align: left; }
+        textarea { width: 95%; height: 60px; margin-top: 5px; background: #333; color: #00ff00; border: 1px solid #555; padding: 8px; font-size: 12px; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #00ff00; border: none; border-radius: 5px; font-weight: bold; margin-top: 10px; }
+        .friend-panel { border-left: 4px solid #00bcff; padding-left: 15px; margin-bottom: 20px; }
         .btn-blue { background: #00bcff; }
+        .grid { display: flex; justify-content: center; flex-wrap: wrap; }
     </style>
 </head>
 <body>
 
-    <h1>Моя трансляция</h1>
-    <div id="status" class="box" style="text-align: center;">Нажмите кнопку, чтобы включить камеру</div>
-    <video id="my-video" autoplay muted playsinline></video>
-    <br>
-    <button id="startBtn" onclick="startStream()">Запустить трансляцию</button>
+    <h1>Мой Стрим для 5 человек</h1>
+    
+    <div id="status" class="box" style="text-align: center; color: white;">
+        Нажмите кнопку, чтобы включить вашу камеру
+    </div>
+    
+    <div class="grid">
+        <div>
+            <h3>Вы (Стример)</h3>
+            <video id="my-video" autoplay muted playsinline></video>
+        </div>
+    </div>
+    
+    <center><button id="startBtn" onclick="initCamera()">Шаг 1: Включить камеру</button></center>
 
-    <div id="answerSection" class="box" style="display:none;">
-        <label><strong>Шаг 2:</strong> Вставьте ответ от друга:</label>
-        <textarea id="answerCode" placeholder="Вставьте сюда код от друга..."></textarea>
-        <button class="btn-blue" onclick="acceptAnswer()">Включить видео другу</button>
+    <!-- Секция управления подключениями друзей -->
+    <div id="connectionsSection" class="box" style="display:none; color: white;">
+        <h3>Шаг 2: Подключение друзей (Максимум 4 друга)</h3>
+        <p>Так как мы работаем напрямую, вам нужно создать отдельный код для каждого из 4 друзей.</p>
+        
+        <!-- Друг 1 -->
+        <div class="friend-panel">
+            <h4>Друг №1</h4>
+            <button onclick="createOfferForFriend(1)">1. Создать код для Друга 1</button>
+            <div id="offer-zone-1"></div>
+        </div>
+
+        <!-- Друг 2 -->
+        <div class="friend-panel">
+            <h4>Друг №2</h4>
+            <button onclick="createOfferForFriend(2)">1. Создать код для Друга 2</button>
+            <div id="offer-zone-2"></div>
+        </div>
+
+        <!-- Друг 3 -->
+        <div class="friend-panel">
+            <h4>Друг №3</h4>
+            <button onclick="createOfferForFriend(3)">1. Создать код для Друга 3</button>
+            <div id="offer-zone-3"></div>
+        </div>
+
+        <!-- Друг 4 -->
+        <div class="friend-panel">
+            <h4>Друг №4</h4>
+            <button onclick="createOfferForFriend(4)">1. Создать код для Друга 4</button>
+            <div id="offer-zone-4"></div>
+        </div>
     </div>
 
     <script>
-        let pc;
+        let localStream;
+        // Храним подключения для каждого из 4 друзей отдельно
+        let peerConnections = { 1: null, 2: null, 3: null, 4: null };
 
-        async function startStream() {
+        // Включаем камеру
+        async function initCamera() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                document.getElementById('my-video').srcObject = stream;
-                document.getElementById('status').innerText = "Создаем подключение...";
+                document.getElementById('status').innerText = "Включаем камеру...";
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                document.getElementById('my-video').srcObject = localStream;
                 
-                // Fixed: Completely blank constructor to prevent parsing errors
-                pc = new RTCPeerConnection(); 
-                stream.getTracks().forEach(track => pc.addTrack(track, stream));
-                
+                document.getElementById('status').innerText = "Камера готова. Теперь настройте друзей ниже.";
+                document.getElementById('connectionsSection').style.display = 'block';
+                document.getElementById('startBtn').style.display = 'none';
+            } catch (err) {
+                document.getElementById('status').innerText = "Ошибка камеры: " + err.message;
+            }
+        }
+
+        // Создаем приглашение для конкретного друга
+        async function createOfferForFriend(id) {
+            try {
+                const pc = new RTCPeerConnection();
+                peerConnections[id] = pc;
+
+                // Отдаем видеопоток этому другу
+                localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
                 const offer = await pc.createOffer();
                 await pc.setLocalDescription(offer);
-                
-                pc.onicecandidate = (e) => {
-                    if (!e.candidate) {
-                        showOfferCode();
-                    }
-                };
-                
+
                 setTimeout(() => {
-                    if (pc.localDescription) showOfferCode();
-                }, 1500);
-
-            } catch (err) { document.getElementById('status').innerText = "Ошибка: " + err.message; }
+                    const base64Code = btoa(JSON.stringify(pc.localDescription));
+                    document.getElementById(`offer-zone-1`).innerHTML = '';
+                    document.getElementById(`offer-zone-${id}`).innerHTML = `
+                        <p style="margin:5px 0; font-size:13px;">Скопируйте и отправьте этот код Другу ${id}:</p>
+                        <textarea readonly onclick="this.select()">${base64Code}</textarea>
+                        <p style="margin:5px 0; font-size:13px;">Вставьте ответный код от Друга ${id} ниже:</p>
+                        <textarea id="answerCode-${id}" placeholder="Вставьте ответ от друга..."></textarea>
+                        <br>
+                        <button class="btn-blue" onclick="acceptAnswerFromFriend(${id})">Включить трансляцию для Друга ${id}</button>
+                    `;
+                }, 1000);
+            } catch (err) {
+                alert("Ошибка: " + err.message);
+            }
         }
 
-        function showOfferCode() {
-            const compressed = btoa(JSON.stringify(pc.localDescription));
-            document.getElementById('status').innerHTML = `
-                <p style="color:white; margin:0; font-weight:bold;">Шаг 1: Скопируйте этот код и отправьте другу:</p>
-                <textarea readonly onclick="this.select()">${compressed}</textarea>
-            `;
-            document.getElementById('answerSection').style.display = 'block';
-            document.getElementById('startBtn').style.display = 'none';
-        }
+        // Принимаем ответ от конкретного друга
+        async function acceptAnswerFromFriend(id) {
+            const answerText = document.getElementById(`answerCode-${id}`).value.trim();
+            if (!answerText) return alert("Пожалуйста, вставьте код!");
 
-        async function acceptAnswer() {
             try {
-                const text = document.getElementById('answerCode').value.trim();
-                const parsed = JSON.parse(atob(text));
-                await pc.setRemoteDescription(new RTCSessionDescription(parsed));
-                document.getElementById('status').innerHTML = "🟢 Соединение установлено! Трансляция идет.";
-                document.getElementById('answerSection').style.display = 'none';
-            } catch (err) { alert("Ошибка в коде: " + err.message); }
+                const answerDesc = JSON.parse(atob(answerText));
+                await peerConnections[id].setRemoteDescription(new RTCSessionDescription(answerDesc));
+                alert(`Успешно! Друг №${id} теперь видит ваш стрим!`);
+            } catch (err) {
+                alert("Ошибка применения кода: " + err.message);
+            }
         }
     </script>
 </body>
