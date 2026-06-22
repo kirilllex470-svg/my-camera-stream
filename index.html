@@ -2,54 +2,42 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Моя Онлайн Трансляция</title>
+    <title>Панель Стримера</title>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; background: #111; color: white; padding: 0; margin: 0; }
-        h1 { margin-top: 20px; font-size: 24px; }
-        .box { font-size: 18px; color: #00ff00; margin: 15px auto; background: #222; padding: 15px; border-radius: 8px; max-width: 600px; }
-        /* Контейнер для видеотрансляции */
-        #meet-container { width: 100%; height: 80vh; background: #000; margin-top: 20px; }
+        h1 { margin-top: 20px; font-size: 24px; color: #00ff00; }
+        .info { font-size: 16px; background: #222; padding: 10px; border-radius: 5px; display: inline-block; margin-top: 10px; }
+        #meet-box { width: 100%; height: 80vh; margin-top: 15px; background: #000; }
     </style>
 </head>
 <body>
 
-    <h1>Онлайн Трансляция для Друзей</h1>
-    <div id="status" class="box">Подключаемся к видеокомнате...</div>
+    <h1>Трансляция запущена!</h1>
+    <div class="info">Вы вещаете как Стример. Друзья должны открыть файл viewer.html</div>
     
-    <!-- Сюда встроится окно трансляции -->
-    <div id="meet-container"></div>
+    <!-- Сюда встроится твоя камера -->
+    <div id="meet-box"></div>
 
-    <!-- Загружаем надежный официальный скрипт связи Jitsi -->
+    <!-- Загружаем официальный скрипт Jitsi -->
     <script src="https://jit.si"></script>
     <script>
         window.onload = function() {
-            // Придумайте СВОЁ уникальное название комнаты на английском (например, вместо "my-camera-room-123")
-            const roomName = "my-secret-stream-room-2026"; 
+            // Придумай свое секретное название комнаты (только английские буквы и цифры)
+            const MY_SECRET_ROOM = "my-private-camera-room-00000"; 
 
-            const isStreamer = window.location.search.includes('stream');
-            
-            // Настройки внешнего вида окна видео
             const options = {
-                roomName: roomName,
+                roomName: MY_SECRET_ROOM,
                 width: '100%',
                 height: '100%',
-                parentNode: document.querySelector('#meet-container'),
+                parentNode: document.querySelector('#meet-box'),
                 lang: 'ru',
                 interfaceConfigOverwrite: {
-                    // Убираем лишние кнопки, оставляем только камеру и звук
-                    TOOLBAR_BUTTONS: ['microphone', 'camera', 'hangup', 'fullscreen']
+                    // Оставляем тебе все кнопки управления
+                    TOOLBAR_BUTTONS: ['microphone', 'camera', 'hangup', 'fullscreen', 'desktop']
                 }
             };
-
-            // Запускаем трансляцию
-            const api = new JitsiMeetExternalAPI("meet.jit.si", options);
-
-            // Меняем текст на экране в зависимости от того, кто зашел
-            if (isStreamer) {
-                document.getElementById('status').innerHTML = "🟢 ВЫ В ЭФИРЕ КАК СТРИМЕР!<br>Камера включилась. Друзья могут заходить по обычной ссылке.";
-            } else {
-                document.getElementById('status').innerHTML = "🟢 Вы вошли как зритель. Приятного просмотра!";
-            }
+            // Запускаем стрим
+            new JitsiMeetExternalAPI("meet.jit.si", options);
         };
     </script>
 </body>
