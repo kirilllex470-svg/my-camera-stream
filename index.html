@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Моя Онлайн Трансляция</title>
+    <!-- We load the PeerJS library here -->
     <script src="https://jsdelivr.net"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; background: #111; color: white; padding: 20px; }
@@ -14,47 +15,55 @@
 <body>
 
     <h1>Онлайн Трансляция</h1>
-    <div id="status" class="box">Определяем режим работы...</div>
+    <div id="status" class="box">Загрузка сети...</div>
     
     <div id="video-container"></div>
 
     <script>
-        // Придумайте СВОЁ секретное слово комнаты (замените это)
+        // Use a unique name for your secret room
         const ROOM_ID = "my-camera-room-xyz-777"; 
 
-        // Проверяем адресную строку: если в конце написано ?stream, то вы админ
         const isStreamer = window.location.search.includes('stream');
 
-        if (isStreamer) {
-            // --- РЕЖИМ СТРИМЕРА ---
-            document.getElementById('status').innerText = "Включаем вашу камеру...";
-            
-            // Создаем тег для вашего видео
-            document.getElementById('video-container').innerHTML = '<video id="my-video" autoplay muted playsinline></video>';
+        // We wrap everything in window.onload to guarantee PeerJS is loaded first!
+        window.onload = function() {
+            document.getElementById('status').innerText = "Сеть готова. Определяем режим...";
 
-            navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((stream) => {
-                document.getElementById('my-video').srcObject = stream;
-                document.getElementById('status').innerText = "Подключаемся к сети...";
+            if (isStreamer) {
+                // --- STREAMER MODE ---
+                document.getElementById('status').innerText = "Включаем вашу камеру...";
+                document.getElementById('video-container').innerHTML = '<video id="my-video" autoplay muted playsinline></video>';
 
-                const peer = new Peer(ROOM_ID);
+                navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((stream) => {
+                    document.getElementById('my-video').srcObject = stream;
+                    document.getElementById('status').innerText = "Подключаемся к серверу...";
 
-                peer.on('open', () => {
-                    document.getElementById('status').innerHTML = "🟢 В ЭФИРЕ!<br>Друзья могут просто переходить по вашей обычной ссылке.";
+                    // Peer is now 100% defined because the library finished loading
+                    const peer = new Peer(ROOM_ID);
+
+                    peer.on('open', () => {
+                        document.getElementById('status').innerHTML = "🟢 В ЭФИРЕ!<br>Друзья могут заходить по вашей обычной ссылке.";
+                    });
+
+                    peer.on('call', (call) => {
+                        call.answer(stream); // Automatically sends video to the friend
+                        document.getElementById('status').innerText = "🟢 Зритель подключился!";
+                    });
+                    
+                    peer.on('error', (err) => {
+                        console.error(err);
+                        document.getElementById('status').innerText = "Ошибка PeerJS: " + err.type;
+                    });
+                }).catch(err => {
+                    document.getElementById('status').innerText = "Ошибка камеры: " + err.message;
                 });
 
-                peer.on('call', (call) => {
-                    call.answer(stream); // Автоматически отдаем видео зрителю без кодов
-                    document.getElementById('status').innerText = "🟢 Зритель подключился!";
-                });
-            }).catch(err => {
-                document.getElementById('status').innerText = "Ошибка камеры: " + err.message;
-            });
-
-        } else {
-            // --- РЕЖИМ ЗРИТЕЛЯ ---
-            document.getElementById('status').innerHTML = "Вы вошли как зритель.<br><button onclick='connectToStream()'>Смотреть трансляцию</button>";
-            document.getElementById('video-container').innerHTML = '<video id="remote-video" autoplay playsinline controls></video>';
-        }
+            } else {
+                // --- VIEWER MODE ---
+                document.getElementById('status').innerHTML = "Вы вошли как зритель.<br><button onclick='connectToStream()'>Смотреть трансляцию</button>";
+                document.getElementById('video-container').innerHTML = '<video id="remote-video" autoplay playsinline controls></video>';
+            }
+        };
 
         function connectToStream() {
             document.getElementById('status').innerText = "Подключаемся к камере друга...";
@@ -69,8 +78,8 @@
                 });
             });
 
-            peer.on('error', () => {
-                document.getElementById('status').innerText = "🔴 Стример еще не включил трансляцию или комната занята.";
+            peer.on('error', (err) => {
+                document.getElementById('status').innerText = "🔴 Ошибка подключения. Убедитесь, что стример в эфире.";
             });
         }
     </script>
