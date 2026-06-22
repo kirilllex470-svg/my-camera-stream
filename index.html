@@ -2,10 +2,10 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Моя трансляция (На 5 человек)</title>
+    <title>Трансляция экрана (До 5 человек)</title>
     <style>
         body { font-family: Arial; text-align: center; background: #111; color: white; padding: 20px; }
-        video { width: 320px; background: #000; border-radius: 8px; margin: 10px; border: 2px solid #333; }
+        video { width: 480px; background: #000; border-radius: 8px; margin: 10px; border: 2px solid #333; }
         .box { font-size: 18px; color: #00ff00; margin: 15px auto; background: #222; padding: 15px; border-radius: 8px; max-width: 600px; text-align: left; }
         textarea { width: 95%; height: 60px; margin-top: 5px; background: #333; color: #00ff00; border: 1px solid #555; padding: 8px; font-size: 14px; }
         button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #00ff00; border: none; border-radius: 5px; font-weight: bold; margin-top: 10px; }
@@ -16,15 +16,16 @@
 </head>
 <body>
 
-    <h1>Моя трансляция (До 5 человек)</h1>
+    <h1>Трансляция экрана (До 5 человек)</h1>
     
     <div id="status" class="box" style="text-align: center;">
-        Нажмите кнопку ниже, чтобы запустить камеру
+        Нажмите кнопку ниже, чтобы выбрать экран для трансляции
     </div>
     
+    <!-- Окно предпросмотра вашего экрана -->
     <video id="my-video" autoplay muted playsinline></video>
     <br>
-    <button id="startBtn" onclick="startStream()">1. Включить камеру</button>
+    <button id="startBtn" onclick="startStream()">1. Включить демонстрацию экрана</button>
 
     <!-- Раздел управления подключениями -->
     <div id="connectionsSection" class="box" style="display:none;">
@@ -34,7 +35,6 @@
 
     <script>
         let localStream;
-        // Массив для хранения 5 отдельных подключений
         let connections = [
             { id: 1, pc: null, name: "Друг 1" },
             { id: 2, pc: null, name: "Друг 2" },
@@ -45,17 +45,28 @@
 
         async function startStream() {
             try {
-                document.getElementById('status').innerText = "Включаем камеру...";
+                document.getElementById('status').innerText = "Выбираем экран...";
                 
-                // Получаем доступ к камере и микрофону
-                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                // ГЛАВНОЕ ИЗМЕНЕНИЕ: Используем getDisplayMedia вместо getUserMedia
+                // Браузер сам откроет системное окно выбора: весь экран, окно программы или вкладка
+                localStream = await navigator.mediaDevices.getDisplayMedia({ 
+                    video: true, 
+                    audio: true // Позволяет также делиться системным звуком, если поставить галочку при выборе
+                });
+                
                 document.getElementById('my-video').srcObject = localStream;
                 
-                document.getElementById('status').innerText = "Камера готова. Сгенерируйте коды ниже.";
+                // Если пользователь нажмет кнопку "Остановить показ" в браузере
+                localStream.getVideoTracks()[0].onended = function () {
+                    document.getElementById('status').innerText = "Трансляция экрана остановлена.";
+                    document.getElementById('connectionsSection').style.display = 'none';
+                    document.getElementById('startBtn').style.display = 'inline-block';
+                };
+
+                document.getElementById('status').innerText = "Экран успешно захвачен! Сгенерируйте коды ниже.";
                 document.getElementById('startBtn').style.display = 'none';
                 document.getElementById('connectionsSection').style.display = 'block';
 
-                // Создаем панели управления для каждого из 5 друзей
                 renderPanels();
             } catch (err) {
                 document.getElementById('status').innerText = "Ошибка: " + err.message;
@@ -85,17 +96,13 @@
             
             zone.innerHTML = "Генерация кода...";
 
-            // Создаем отдельный PeerConnection для этого конкретного друга
             conn.pc = new RTCPeerConnection();
             
-            // Добавляем наши медиапотоки
             localStream.getTracks().forEach(track => conn.pc.addTrack(track, localStream));
             
-            // Создаем предложение (Offer)
             const offer = await conn.pc.createOffer();
             await conn.pc.setLocalDescription(offer);
             
-            // Ждем секунду для сбора данных, затем показываем интерфейс ввода/вывода
             setTimeout(() => {
                 const base64Code = btoa(JSON.stringify(conn.pc.localDescription));
                 zone.innerHTML = `
