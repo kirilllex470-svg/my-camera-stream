@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Трансляция экрана (Рабочая версия)</title>
+    <title>Трансляция экрана (Фикс rtcp-mux)</title>
     <style>
         body { font-family: Arial; text-align: center; background: #111; color: white; padding: 20px; }
         video { width: 400px; background: #000; border-radius: 8px; border: 2px solid #333; }
@@ -43,25 +43,22 @@
             } catch (err) { alert("Ошибка: " + err.message); }
         }
 
-        // Безопасное сжатие: оставляет только самые важные медиа-настройки и параметры сети
         function compress(sdp) {
-            let fields = { ufrag: '', pwd: '', fp: '', ssrc: '' };
+            let fields = { ufrag: '', pwd: '', fp: '' };
             sdp.split('\r\n').forEach(line => {
                 if (line.startsWith('a=ice-ufrag:')) fields.ufrag = line.split(':')[1];
                 if (line.startsWith('a=ice-pwd:')) fields.pwd = line.split(':')[1];
                 if (line.startsWith('a=fingerprint:sha-256 ')) fields.fp = line.split('sha-256 ')[1];
-                if (line.startsWith('a=ssrc:') && line.includes('cname:')) fields.ssrc = line.split(' ')[0].split(':')[1];
             });
             return btoa(JSON.stringify(fields));
         }
 
-        // Восстановление полноценной структуры WebRTC с кодеком VP8
         function decompress(shortStr, isAnswer) {
             let d = JSON.parse(atob(shortStr));
             let setup = isAnswer ? 'active' : 'actpass';
             return {
                 type: isAnswer ? 'answer' : 'offer',
-                sdp: `v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=-\r\nt=0 0\r\na=msid-semantic: WMS\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\nc=IN IP4 0.0.0.0\r\na=rtpmap:96 VP8/90000\r\na=setup:${setup}\r\na=mid:0\r\na=ice-ufrag:${d.ufrag}\r\na=ice-pwd:${d.pwd}\r\na=fingerprint:sha-256 ${d.fp}\r\n` + (d.ssrc ? `a=ssrc:${d.ssrc} cname:stream\r\n` : '')
+                sdp: `v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=-\r\nt=0 0\r\na=msid-semantic: WMS\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\nc=IN IP4 0.0.0.0\r\na=rtpmap:96 VP8/90000\r\na=rtcp-mux\r\na=setup:${setup}\r\na=mid:0\r\na=ice-ufrag:${d.ufrag}\r\na=ice-pwd:${d.pwd}\r\na=fingerprint:sha-256 ${d.fp}\r\n`
             };
         }
 
@@ -93,7 +90,7 @@
                 let fullAnswer = decompress(txt, true);
                 await pcs[id].setRemoteDescription(new RTCSessionDescription(fullAnswer));
                 document.getElementById(`z-${id}`).innerHTML = "<b style='color:#00ff00'>✓ Подключено!</b>";
-            } catch(e) { alert("Ошибка кода! Проверьте правильность скопированного текста."); }
+            } catch(e) { alert("Ошибка кода: " + e.message); }
         }
     </script>
 </body>
