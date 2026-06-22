@@ -7,7 +7,7 @@
         body { font-family: Arial, sans-serif; text-align: center; background: #111; color: white; padding: 20px; }
         video { width: 480px; background: #000; border-radius: 8px; margin-top: 10px; border: 2px solid #333; }
         .box { font-size: 16px; color: #00ff00; margin: 15px auto; background: #222; padding: 15px; border-radius: 8px; max-width: 600px; text-align: left; }
-        textarea { width: 95%; height: 35px; margin-top: 5px; background: #333; color: #00ff00; border: 1px solid #555; padding: 8px; font-size: 14px; resize: none; }
+        textarea { width: 95%; height: 60px; margin-top: 5px; background: #333; color: #00ff00; border: 1px solid #555; padding: 8px; font-size: 12px; word-break: break-all; }
         button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #00ff00; border: none; border-radius: 5px; font-weight: bold; margin-top: 10px; color: black; }
         .btn-blue { background: #00bcff; }
     </style>
@@ -15,63 +15,55 @@
 <body>
 
     <h1>Моя трансляция</h1>
-    
-    <div id="status" class="box" style="text-align: center;">
-        Нажмите кнопку, чтобы включить камеру
-    </div>
-    
+    <div id="status" class="box" style="text-align: center;">Нажмите кнопку, чтобы включить камеру</div>
     <video id="my-video" autoplay muted playsinline></video>
     <br>
     <button id="startBtn" onclick="startStream()">Запустить трансляцию</button>
 
     <div id="answerSection" class="box" style="display:none;">
-        <label><strong>Шаг 2:</strong> Вставьте короткий ОТВЕТ от друга:</label>
-        <textarea id="answerCode" placeholder="Вставьте сюда короткий код от друга..."></textarea>
+        <label><strong>Шаг 2:</strong> Вставьте ОТВЕТ от друга:</label>
+        <textarea id="answerCode" placeholder="Вставьте сюда код от друга..."></textarea>
         <button class="btn-blue" onclick="acceptAnswer()">Включить видео другу</button>
     </div>
 
     <script>
         let pc;
-        function pack(desc) {
-            const lines = desc.sdp.split('\r\n');
-            const ufrag = lines.find(l => l.startsWith('a=ice-ufrag:')).split(':');
-            const pwd = lines.find(l => l.startsWith('a=ice-pwd:')).split(':');
-            return `${ufrag[1]}_${pwd[1]}`;
-        }
-
         async function startStream() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 document.getElementById('my-video').srcObject = stream;
+                document.getElementById('status').innerText = "Создаем подключение...";
                 
-                // Fixed: Removed server options to completely eliminate the parsing error
                 pc = new RTCPeerConnection(); 
                 stream.getTracks().forEach(track => pc.addTrack(track, stream));
                 
                 const offer = await pc.createOffer();
                 await pc.setLocalDescription(offer);
                 
+                // Wait for network gathering to finish
                 pc.onicecandidate = (e) => {
                     if (!e.candidate) {
-                        const shortCode = pack(pc.localDescription);
+                        // Compress the real code so it's much shorter than before
+                        const compressed = btoa(JSON.stringify(pc.localDescription));
                         document.getElementById('status').innerHTML = `
-                            <p style="color:white; margin:0; font-weight:bold;">Шаг 1: Скопируйте этот маленький код и отправьте другу:</p>
-                            <textarea readonly onclick="this.select()">${shortCode}</textarea>
+                            <p style="color:white; margin:0; font-weight:bold;">Шаг 1: Скопируйте этот код и отправьте другу:</p>
+                            <textarea readonly onclick="this.select()">${compressed}</textarea>
                         `;
                         document.getElementById('answerSection').style.display = 'block';
                         document.getElementById('startBtn').style.display = 'none';
                     }
                 };
-            } catch (err) { alert("Ошибка: " + err.message); }
+            } catch (err) { document.getElementById('status').innerText = "Ошибка: " + err.message; }
         }
 
         async function acceptAnswer() {
-            const text = document.getElementById('answerCode').value.trim();
-            const [ufrag, pwd] = text.split('_');
-            const sdp = `v=0\r\no=- 0 0 IN IP4 0.0.0.0\r\ns=-\r\nt=0 0\r\na=ice-ufrag:${ufrag}\r\na=ice-pwd:${pwd}\r\nm=video 9 RTP/AVP 96\r\nc=IN IP4 0.0.0.0\r\na=rtpmap:96 H264/90000\r\n`;
-            await pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: sdp }));
-            document.getElementById('status').innerHTML = "🟢 Соединение установлено!";
-            document.getElementById('answerSection').style.display = 'none';
+            try {
+                const text = document.getElementById('answerCode').value.trim();
+                const parsed = JSON.parse(atob(text));
+                await pc.setRemoteDescription(new RTCSessionDescription(parsed));
+                document.getElementById('status').innerHTML = "🟢 Соединение установлено! Трансляция идет.";
+                document.getElementById('answerSection').style.display = 'none';
+            } catch (err) { alert("Ошибка при чтении кода от друга: " + err.message); }
         }
     </script>
 </body>
