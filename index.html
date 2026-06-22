@@ -2,91 +2,51 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Моя трансляция (Напрямую)</title>
+    <title>Стрим без кодов</title>
+    <!-- Подключаем самую стабильную версию PeerJS -->
+    <script src="https://jsdelivr.net"></script>
     <style>
         body { font-family: Arial; text-align: center; background: #111; color: white; padding: 20px; }
         video { width: 480px; background: #000; border-radius: 8px; margin-top: 10px; border: 2px solid #333; }
-        .box { font-size: 18px; color: #00ff00; margin: 15px auto; background: #222; padding: 15px; border-radius: 8px; max-width: 600px; text-align: left; }
-        textarea { width: 95%; height: 80px; margin-top: 5px; background: #333; color: #00ff00; border: 1px solid #555; padding: 8px; font-size: 14px; }
-        button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #00ff00; border: none; border-radius: 5px; font-weight: bold; margin-top: 10px; }
-        .btn-blue { background: #00bcff; }
+        .box { font-size: 18px; color: #00ff00; margin: 15px auto; background: #222; padding: 15px; border-radius: 8px; max-width: 600px; text-align: center; }
     </style>
 </head>
 <body>
 
-    <h1>Моя трансляция</h1>
-    
-    <div id="status" class="box" style="text-align: center;">
-        Нажмите кнопку ниже, чтобы начать трансляцию
-    </div>
-    
+    <h1>Моя трансляция (Авто-подключение)</h1>
+    <div id="status" class="box">Включаем камеру...</div>
     <video id="my-video" autoplay muted playsinline></video>
-    <br>
-    <button id="startBtn" onclick="startStream()">Запустить трансляцию</button>
-
-    <!-- Поле для Шага 2 (появится после включения камеры) -->
-    <div id="answerSection" class="box" style="display:none;">
-        <label><strong>Шаг 2:</strong> Вставьте ответный код, который вам прислал друг:</label>
-        <textarea id="answerCode" placeholder="Вставьте ответный код сюда..."></textarea>
-        <button class="btn-blue" onclick="acceptAnswer()">Включить связь с другом</button>
-    </div>
 
     <script>
-        let pc; // Объявляем переменную для связи глобально
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((stream) => {
+            document.getElementById('my-video').srcObject = stream;
+            document.getElementById('status').innerText = "Подключаемся к серверу...";
 
-        async function startStream() {
-            try {
-                document.getElementById('status').innerText = "Включаем камеру...";
-                
-                // 1. Получаем доступ к камере
-                const localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                document.getElementById('my-video').srcObject = localStream;
-                
-                document.getElementById('status').innerText = "Создаем подключение...";
+            // Создаем подключение с фиксированным ID комнаты. 
+            // ЗАМЕНИТЕ 'my-unique-camera-room-2026' НА СВОЕ СЕКРЕТНОЕ СЛОВО!
+            const peer = new Peer('my-unique-camera-room-2026');
 
-                // 2. Создаем объект соединения
-                pc = new RTCPeerConnection();
-                
-                // 3. Добавляем видео и звук в канал связи
-                localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-                
-                // 4. Создаем приглашение (Offer)
-                const offer = await pc.createOffer();
-                await pc.setLocalDescription(offer);
-                
-                // 5. Ждем секунду и показываем код для друга
-                setTimeout(() => {
-                    const base64Code = btoa(JSON.stringify(pc.localDescription));
-                    document.getElementById('status').innerHTML = `
-                        <p style="color:white; margin:0; font-weight:bold;">Шаг 1: Скопируйте этот код и отправьте другу:</p>
-                        <textarea readonly onclick="this.select()">${base64Code}</textarea>
-                    `;
-                    // Показываем окошко для Шага 2
-                    document.getElementById('answerSection').style.display = 'block';
-                    document.getElementById('startBtn').style.display = 'none';
-                }, 1000);
+            peer.on('open', (id) => {
+                document.getElementById('status').innerHTML = `🟢 Трансляция готова!<br>Друг может заходить на страницу зрителя.`;
+            });
 
-            } catch (err) {
-                document.getElementById('status').innerText = "Ошибка: " + err.message;
-            }
-        }
+            // Когда зритель заходит на свою страницу, он автоматически "звонит" вам
+            peer.on('call', (call) => {
+                // Браузер сам автоматически отвечает и отдает видео
+                call.answer(stream);
+                document.getElementById('status').innerHTML = `🟢 Зритель подключился и смотрит!`;
+            });
 
-        async function acceptAnswer() {
-            const answerText = document.getElementById('answerCode').value.trim();
-            if (!answerText) return alert("Пожалуйста, вставьте ответный код от друга!");
-
-            try {
-                // Декодируем и применяем ответный код от друга
-                const answerDesc = JSON.parse(atob(answerText));
-                await pc.setRemoteDescription(new RTCSessionDescription(answerDesc));
-                
-                document.getElementById('status').innerHTML = "<p style='color:#00ff00; margin:0; font-weight:bold;'>Соединение установлено! Трансляция идет напрямую.</p>";
-                document.getElementById('answerSection').style.display = 'none';
-            } catch (err) {
-                alert("Ошибка применения кода: " + err.message);
-            }
-        }
+            peer.on('error', (err) => {
+                if (err.type === 'unavailable-id') {
+                    document.getElementById('status').innerText = "Ошибка: Это имя комнаты уже занято. Придумайте другое в коде!";
+                } else {
+                    document.getElementById('status').innerText = "Ошибка сети: " + err.type;
+                }
+            });
+        }).catch(err => {
+            document.getElementById('status').innerText = "Ошибка доступа к камере: " + err.message;
+        });
     </script>
-
 </body>
 </html>
