@@ -2,74 +2,91 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Прямая трансляция для друзей</title>
-    <!-- Подключаем библиотеку PeerJS, которая связывает компьютеры напрямую -->
-    <script src="https://unpkg.com"></script>
+    <title>Моя трансляция (Напрямую)</title>
     <style>
-        body { background: #111; color: white; text-align: center; font-family: sans-serif; padding: 20px; }
-        video { width: 80%; max-width: 700px; background: #000; border: 2px solid #333; border-radius: 8px; }
-        .btn { padding: 10px 20px; font-size: 16px; margin: 10px; cursor: pointer; background: #28a745; color: white; border: none; border-radius: 5px; }
-        #peer-id-display { font-weight: bold; color: #007bff; }
+        body { font-family: Arial; text-align: center; background: #111; color: white; padding: 20px; }
+        video { width: 480px; background: #000; border-radius: 8px; margin-top: 10px; border: 2px solid #333; }
+        .box { font-size: 18px; color: #00ff00; margin: 15px auto; background: #222; padding: 15px; border-radius: 8px; max-width: 600px; text-align: left; }
+        textarea { width: 95%; height: 80px; margin-top: 5px; background: #333; color: #00ff00; border: 1px solid #555; padding: 8px; font-size: 14px; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #00ff00; border: none; border-radius: 5px; font-weight: bold; margin-top: 10px; }
+        .btn-blue { background: #00bcff; }
     </style>
 </head>
 <body>
 
-    <h1>🔴 Мой Стрим (WebRTC)</h1>
+    <h1>Моя трансляция</h1>
     
-    <!-- Сюда выводится ID вашей комнаты -->
-    <p>ID вашей трансляции: <span id="peer-id-display">Создание...</span></p>
-
-    <div>
-        <button class="btn" onclick="startStream()">1. Запустить трансляцию экрана</button>
+    <div id="status" class="box" style="text-align: center;">
+        Нажмите кнопку ниже, чтобы начать трансляцию
     </div>
+    
+    <video id="my-video" autoplay muted playsinline></video>
+    <br>
+    <button id="startBtn" onclick="startStream()">Запустить трансляцию</button>
 
-    <div>
-        <input type="text" id="connect-id" placeholder="Вставьте ID друга">
-        <button class="btn" style="background:#007bff;" onclick="connectToFriend()">Подключиться к другу</button>
+    <!-- Поле для Шага 2 (появится после включения камеры) -->
+    <div id="answerSection" class="box" style="display:none;">
+        <label><strong>Шаг 2:</strong> Вставьте ответный код, который вам прислал друг:</label>
+        <textarea id="answerCode" placeholder="Вставьте ответный код сюда..."></textarea>
+        <button class="btn-blue" onclick="acceptAnswer()">Включить связь с другом</button>
     </div>
-
-    <video id="remote-video" autoplay playsinline controls></video>
 
     <script>
-        let peer = new Peer(); // Создаем подключение к бесплатному серверу связи
-        let localStream;
+        let pc; // Объявляем переменную для связи глобально
 
-        // Показываем ваш ID, когда он создался
-        peer.on('open', (id) => {
-            document.getElementById('peer-id-display').innerText = id;
-        });
-
-        // 1. Функция захвата экрана компьютера
         async function startStream() {
             try {
-                // Запрашиваем захват экрана и звука
-                localStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-                document.getElementById('remote-video').srcObject = localStream;
-                alert("Экран захвачен! Передайте ваш ID другу.");
+                document.getElementById('status').innerText = "Включаем камеру...";
+                
+                // 1. Получаем доступ к камере
+                const localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                document.getElementById('my-video').srcObject = localStream;
+                
+                document.getElementById('status').innerText = "Создаем подключение...";
+
+                // 2. Создаем объект соединения
+                pc = new RTCPeerConnection();
+                
+                // 3. Добавляем видео и звук в канал связи
+                localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+                
+                // 4. Создаем приглашение (Offer)
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                
+                // 5. Ждем секунду и показываем код для друга
+                setTimeout(() => {
+                    const base64Code = btoa(JSON.stringify(pc.localDescription));
+                    document.getElementById('status').innerHTML = `
+                        <p style="color:white; margin:0; font-weight:bold;">Шаг 1: Скопируйте этот код и отправьте другу:</p>
+                        <textarea readonly onclick="this.select()">${base64Code}</textarea>
+                    `;
+                    // Показываем окошко для Шага 2
+                    document.getElementById('answerSection').style.display = 'block';
+                    document.getElementById('startBtn').style.display = 'none';
+                }, 1000);
+
             } catch (err) {
-                console.error("Ошибка захвата экрана: ", err);
+                document.getElementById('status').innerText = "Ошибка: " + err.message;
             }
         }
 
-        // Ждем, пока кто-то подключится к нам
-        peer.on('call', (call) => {
-            call.answer(localStream); // Отправляем наш поток экрана другу
-            call.on('stream', (stream) => {
-                document.getElementById('remote-video').srcObject = stream;
-            });
-        });
+        async function acceptAnswer() {
+            const answerText = document.getElementById('answerCode').value.trim();
+            if (!answerText) return alert("Пожалуйста, вставьте ответный код от друга!");
 
-        // 2. Функция для друга, чтобы подключиться по ID
-        function connectToFriend() {
-            const friendId = document.getElementById('connect-id').value;
-            if (!friendId) return alert("Введите ID трансляции!");
-            
-            // Звоним другу
-            let call = peer.call(friendId, localStream);
-            call.on('stream', (stream) => {
-                document.getElementById('remote-video').srcObject = stream;
-            });
+            try {
+                // Декодируем и применяем ответный код от друга
+                const answerDesc = JSON.parse(atob(answerText));
+                await pc.setRemoteDescription(new RTCSessionDescription(answerDesc));
+                
+                document.getElementById('status').innerHTML = "<p style='color:#00ff00; margin:0; font-weight:bold;'>Соединение установлено! Трансляция идет напрямую.</p>";
+                document.getElementById('answerSection').style.display = 'none';
+            } catch (err) {
+                alert("Ошибка применения кода: " + err.message);
+            }
         }
     </script>
+
 </body>
 </html>
